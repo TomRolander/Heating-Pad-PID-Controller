@@ -130,6 +130,7 @@ double Setpoint[3] = {28.0, 28.0, 28.0};
 double SetpointNew = 0;
 
 int DisabledHeatPads[3] = {0,0,0};
+int ErrHeatPads[3] =  {0,0,0};
 
 //Specify the links and initial tuning parameters
 //double Kp=2, Ki=5, Kd=1;
@@ -184,7 +185,10 @@ void setup()
       case MAX31856_TCTYPE_T: Serial.println("T Type"); break;
       case MAX31856_VMODE_G8: Serial.println("Voltage x8 Gain mode"); break;
       case MAX31856_VMODE_G32: Serial.println("Voltage x8 Gain mode"); break;
-      default: Serial.println("Unknown"); break;
+      default: 
+        ErrHeatPads[i] = -1;
+        Serial.println("Unknown");
+        break;
     }
     max[i].setTempFaultThreshholds(0.0, 200.0);    
   }
@@ -639,22 +643,33 @@ void loop()
   }
 
   for (int i=0; i<3; i++)
-  {
+  {    
+    if (ErrHeatPads[i])
+      continue;
+
     if (DisabledHeatPads[i])
       continue;
+
+    float fThermocoupleTemperature = max[i].readThermocoupleTemperature();
+    if (fThermocoupleTemperature < 10.0 ||
+        fThermocoupleTemperature > 35.0)
+    {
+      ErrHeatPads[i] = -3;
+      continue;
+    }
 
     switch (i)
     {
       case 0:
-        myRA_1.addValue(max[i].readThermocoupleTemperature());
+        myRA_1.addValue(fThermocoupleTemperature);
         Input[i] = myRA_1.getAverage();
         break;
       case 1:
-        myRA_2.addValue(max[i].readThermocoupleTemperature());
+        myRA_2.addValue(fThermocoupleTemperature);
         Input[i] = myRA_2.getAverage();
         break;
       case 2:
-        myRA_3.addValue(max[i].readThermocoupleTemperature());
+        myRA_3.addValue(fThermocoupleTemperature);
         Input[i] = myRA_3.getAverage();
         break;
     }
@@ -662,7 +677,9 @@ void loop()
 
     // Check and print any faults
     uint8_t fault = max[i].readFault();
-    if (fault) {
+    if (fault)
+    {
+      ErrHeatPads[i] = -2;
       if (fault & MAX31856_FAULT_CJRANGE) Serial.println("Cold Junction Range Fault");
       if (fault & MAX31856_FAULT_TCRANGE) Serial.println("Thermocouple Range Fault");
       if (fault & MAX31856_FAULT_CJHIGH)  Serial.println("Cold Junction High Fault");
@@ -707,7 +724,7 @@ void loop()
   for (int i=0; i<3; i++)
   {
     int iOffset = 1+(i*5);
-    if (DisabledHeatPads[i])
+    if (DisabledHeatPads[i] || (ErrHeatPads[i] != 0))
     {
       lcd.setCursor(iOffset, 1);
       lcd.print("    ");
@@ -818,6 +835,13 @@ void DisplaySetpoints()
   for (int i=0; i<3; i++)
   {
     int iOffset = 1+(i*5);
+    
+    if (ErrHeatPads[i] != 0)
+    {
+      lcd.setCursor(iOffset, 0);
+      lcd.print("ERR ");
+    }
+    else
     if (DisabledHeatPads[i] == 1)
     {
       lcd.setCursor(iOffset, 0);
