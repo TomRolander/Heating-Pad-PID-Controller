@@ -105,7 +105,7 @@ RunningAverage myRA_1(20);
 RunningAverage myRA_2(20);
 RunningAverage myRA_3(20);
 long samples = 0;
-int iNmbSamples = 50; //50; //25; //50;
+int iNmbSamples = 100; //50; //25; //50;
 
 #include <Adafruit_MAX31856.h>
 
@@ -726,6 +726,7 @@ void loop()
     int iOffset = 1+(i*5);
     if (DisabledHeatPads[i] || (ErrHeatPads[i] != 0))
     {
+      digitalWrite(Relay_Pins[i],HIGH);    //OFF
       lcd.setCursor(iOffset, 1);
       lcd.print("    ");
     }
