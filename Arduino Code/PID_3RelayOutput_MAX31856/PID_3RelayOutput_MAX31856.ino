@@ -14,14 +14,15 @@
  * window being "Relay Off Time"
  ********************************************************/
 
-#define DEBUG_OUTPUT  1
+#define DEBUG_OUTPUT    1
+#define SD_DATA_LOGGING 1
 
 void(* resetFunc) (void) = 0;
 
 // Rotary Encoder Inputs
-#define CLK 2
-#define DT 3
-#define SW 4
+#define CLK 51
+#define DT  52
+#define SW  53
 
 int currentStateCLK = 0;
 int lastStateCLK = 0;
@@ -104,23 +105,24 @@ unsigned long ulStartTime = 0;
 RunningAverage myRA_1(20);
 RunningAverage myRA_2(20);
 RunningAverage myRA_3(20);
-long samples = 0;
+
+long samples = -1;
 int iNmbSamples = 100; //50; //25; //50;
 
 #include <Adafruit_MAX31856.h>
 
 // Use software SPI: CS, DI, DO, CLK
 Adafruit_MAX31856 max[3] = {
-  Adafruit_MAX31856(10, 11, 12, 13),
-  Adafruit_MAX31856( 9, 11, 12, 13),
-  Adafruit_MAX31856( 8, 11, 12, 13)
+  Adafruit_MAX31856(40, 41, 42, 43),
+  Adafruit_MAX31856(39, 41, 42, 43),
+  Adafruit_MAX31856(38, 41, 42, 43)
 };
 
 #include <PID_v1.h>
 
-#define RELAY_1 21
-#define RELAY_2 20
-#define RELAY_3 19
+#define RELAY_1 33  //21
+#define RELAY_2 32  //20
+#define RELAY_3 31  //19
 
 int Relay_Pins[3] = {RELAY_1,RELAY_2,RELAY_3};
 int iRelay = 0;
@@ -151,6 +153,52 @@ PID myPID[3] = {
 };
 
 unsigned long windowStartTime[3];
+
+
+#if SD_DATA_LOGGING
+// SD Card used for data logging
+#include <SD.h>
+
+// set up variables using the SD utility library functions:
+Sd2Card card;
+SdVolume volume;
+SdFile root;
+
+// SD Shield
+//
+// change this to match your SD shield or module;
+// Arduino Ethernet shield: pin 4
+// Adafruit SD shields and modules: pin 10
+// Sparkfun SD shield: pin 8
+// MKRZero SD: SDCARD_SS_PIN
+//#define chipSelectSDCard 4
+#define chipSelectSDCard 10
+
+File fileSDCard;
+
+// Date and time functions using a DS1307 RTC connected via I2C and Wire lib
+#include "RTClib.h"
+
+RTC_PCF8523 rtc;
+DateTime now;
+
+bool bSDLogFail = false;
+
+unsigned long timeLastLog = 0;
+int currentYear  = 0;;
+int currentMonth = 0;
+int currentDay   = 0;
+int currentHour  = 0;
+int currentMin   = 0;
+int currentSec   = 0;
+
+// String constants
+char ERROR_NO_RTC[]       = "Couldnt find RTC";
+char ERROR_NO_SDCARD[]    = "SD Card Missing?";
+
+char szOperation[32] = "Startup";
+
+#endif
 
 void setup()
 {
@@ -213,8 +261,6 @@ void setup()
   Serial.println("Starting Loop");
 #endif
 
-  DisplaySetpoints();
-
 	// Set encoder pins as inputs
 	pinMode(CLK,INPUT);
 	pinMode(DT,INPUT);
@@ -238,6 +284,56 @@ void setup()
 #endif
 
   LoadEEPROM();
+
+#if SD_DATA_LOGGING
+  // Initialize the Real Time Clock
+  if (! rtc.begin())
+  {
+    Serial.println(ERROR_NO_RTC);
+    LCD_DisplayErrorAndHALT(ERROR_NO_RTC);
+  }
+  if (! rtc.initialized())
+  {
+    Serial.println("RTC isnt running");
+
+    // following line sets the RTC to the date & time this sketch was compiled
+    rtc.adjust(DateTime(__DATE__, __TIME__));
+    // This line sets the RTC with an explicit date & time, for example to set
+    // January 21, 2014 at 3am you would call:
+    // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  }
+  now = rtc.now();
+  currentYear = now.year();
+  currentMonth = now.month();
+  currentDay  = now.day();
+  currentHour = now.hour();
+  currentMin  = now.minute();
+  currentSec  = now.second();
+
+  Serial.println("*** DATE ***    ");
+  Serial.print(currentYear, DEC);
+  Serial.print("/");
+  SerialPrintTwoDigits(currentMonth);
+  Serial.print("/");
+  SerialPrintTwoDigits(currentDay);
+  Serial.print(" ");
+  SerialPrintTwoDigits(currentHour);
+  Serial.print(":");
+  SerialPrintTwoDigits(currentMin);
+  Serial.print(":");
+  SerialPrintTwoDigits(currentSec);
+  Serial.println("");
+
+  SetupSDCardOperations();
+
+  Serial.println("Setup complete.");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Setup complete.");
+
+#endif
+
+  DisplaySetpoints();
 
 }
 
@@ -329,6 +425,15 @@ void SetupEEPROM()
 
 void loop()
 {
+#if SD_DATA_LOGGING
+  now = rtc.now();
+  currentYear = now.year();
+  currentMonth = now.month();
+  currentDay  = now.day();
+  currentHour = now.hour();
+  currentMin  = now.minute();
+#endif
+
   if (iState == STATE_AUTO_RUN_AT_STARTUP)
   {
     iState = STATE_RUNNING_CHECK_FOR_STOP;
@@ -737,15 +842,29 @@ void loop()
   samples++;
   if ((samples % iNmbSamples) == 0)
   {
-    Serial.print("Average_1:");
-    Serial.print(Average[0]);
-    Serial.print(",");
-    Serial.print("Average_2:");
-    Serial.print(Average[1]);
-    Serial.print(",");
-    Serial.print("Average_3:");
-    Serial.print(Average[2]);
-    Serial.print(",");
+
+#if SD_DATA_LOGGING
+  SDLogging(currentYear, currentMonth, currentDay, currentHour, currentMin, currentSec, szOperation, Setpoint[0], Average[0], Setpoint[1], Average[1], Setpoint[2], Average[2]);
+  strcpy(szOperation, "TempReadings");
+#endif
+
+    for (int i=0; i<3; i++)
+    {
+      Serial.print("AVG_");
+      Serial.print(i+1);
+      Serial.print(":");
+      if (DisabledHeatPads[i] == 1)
+        Serial.print("OFF  ");
+      else
+      if (ErrHeatPads[i] != 0)
+      {
+        Serial.print("ERR");
+        Serial.print(ErrHeatPads[i]);
+      }
+      else
+        Serial.print(Average[i]);
+      Serial.print(",");
+    }     
     Serial.print("Upper:"); Serial.print(Setpoint[0]+0.25); Serial.print(",");
     Serial.print("Lower:"); Serial.print(Setpoint[0]-0.25); Serial.print(",");
     Serial.print("Setpoint:"); Serial.print(Setpoint[0]); //Serial.print(",");
@@ -852,3 +971,303 @@ void DisplaySetpoints()
       showValue(0, iOffset,Setpoint[i]);
   }
 }
+
+#if SD_DATA_LOGGING
+
+void SerialPrintTwoDigits(int iVal)
+{
+  if (iVal < 10)
+    Serial.print("0");
+  Serial.print(iVal, DEC);
+}
+
+void SDCardPrintTwoDigits(int iVal)
+{
+  if (iVal < 10)
+    fileSDCard.print("0");
+  fileSDCard.print(iVal, DEC);
+}
+
+void LCD_DisplayErrorAndHALT(char *errorMessage)
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("*** ERROR ***");
+  lcd.setCursor(0, 1);
+  lcd.print(errorMessage);
+  while (1);
+}
+
+// Initialize the SD for operations
+// If the LOGGINGx.CSV file is not present create the file with the first line of column headings
+void SetupSDCardOperations()
+{
+  Serial.print("\nInitializing SD card...");
+
+  // we'll use the initialization code from the utility libraries
+  // since we're just testing if the card is working!
+  if (!card.init(SPI_HALF_SPEED, chipSelectSDCard)) {
+    Serial.println("initialization failed.");
+    Serial.println(ERROR_NO_SDCARD);
+    LCD_DisplayErrorAndHALT(ERROR_NO_SDCARD);
+  } else {
+    Serial.println("Wiring is correct and a card is present.");
+  }
+
+  // print the type of card
+  Serial.println();
+  Serial.print("Card type:         ");
+  switch (card.type()) {
+    case SD_CARD_TYPE_SD1:
+      Serial.println("SD1");
+      break;
+    case SD_CARD_TYPE_SD2:
+      Serial.println("SD2");
+      break;
+    case SD_CARD_TYPE_SDHC:
+      Serial.println("SDHC");
+      break;
+    default:
+      Serial.println("Unknown");
+  }
+
+  // Now we will try to open the 'volume'/'partition' - it should be FAT16 or FAT32
+  if (!volume.init(card)) {
+    Serial.println("Could not find FAT16/FAT32 partition.\nMake sure you've formatted the card");
+    while (1);
+  }
+
+  Serial.print("Clusters:          ");
+  Serial.println(volume.clusterCount());
+  Serial.print("Blocks x Cluster:  ");
+  Serial.println(volume.blocksPerCluster());
+
+  Serial.print("Total Blocks:      ");
+  Serial.println(volume.blocksPerCluster() * volume.clusterCount());
+  Serial.println();
+
+  // print the type and size of the first FAT-type volume
+  uint32_t volumesize;
+  Serial.print("Volume type is:    FAT");
+  Serial.println(volume.fatType(), DEC);
+
+  volumesize = volume.blocksPerCluster();    // clusters are collections of blocks
+  volumesize *= volume.clusterCount();       // we'll have a lot of clusters
+  volumesize /= 2;                           // SD card blocks are always 512 bytes (2 blocks are 1KB)
+  Serial.print("Volume size (Kb):  ");
+  Serial.println(volumesize);
+  Serial.print("Volume size (Mb):  ");
+  volumesize /= 1024;
+  Serial.println(volumesize);
+  Serial.print("Volume size (Gb):  ");
+  Serial.println((float)volumesize / 1024.0);
+
+  Serial.println("\nFiles found on the card (name, date and size in bytes): ");
+  root.openRoot(volume);
+
+  // list all files in the card with date and size
+  root.ls(LS_R | LS_DATE | LS_SIZE);
+
+  Serial.println("");
+  Serial.println("*** STATUS ***  ");
+  Serial.println("SD Init Start   ");
+
+  if (!SD.begin(chipSelectSDCard)) {
+    Serial.println("*** ERROR ***   ");
+    Serial.println("SD Init Failed  ");
+    Serial.println("System HALTED!");
+    while (1);
+  }
+
+  Serial.println("* Test CLOCK.CSV");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("* Test CLOCK.CSV");
+  lcd.setCursor(0, 1);
+
+  if (SD.exists("CLOCK.CSV"))
+  {
+    fileSDCard = SD.open("CLOCK.CSV", FILE_READ);
+    if (fileSDCard)
+    {
+      char *ptr3 = 0;
+
+      if (fileSDCard.available())
+      {
+        char strClockSetting[256];
+        char strClockSettingCopy[256];
+        fileSDCard.read(strClockSetting, sizeof(strClockSetting));
+        fileSDCard.close();
+        strClockSetting[sizeof(strClockSetting) - 1] = '\0';
+        char *ptr1 = strchr(&strClockSetting[0], '\n');
+        if (ptr1 != 0)
+        {
+          *ptr1++ = '\0';
+        }
+        Serial.println("Set Clock:");
+        Serial.println(strClockSetting);
+
+        ptr3 = strchr(ptr1, '\n');
+        if (ptr3 != 0)
+        {
+          *ptr3++ = '\0';
+          strcpy(strClockSettingCopy, ptr1);
+        }
+        Serial.println(ptr1);
+
+        int iDateTime[6] = {0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < 6; i++)
+        {
+          char *ptr2 = strchr(ptr1, ',');
+          if (ptr2 != 0)
+          {
+            *ptr2 = '\0';
+            iDateTime[i] = atoi(ptr1);
+            ptr1 = &ptr2[1];
+          }
+          else
+          {
+            if (i == 5)
+              iDateTime[5] = atoi(ptr1);
+            break;
+          }
+        }
+
+        rtc.adjust(DateTime(iDateTime[0], iDateTime[1], iDateTime[2], iDateTime[3], iDateTime[4], iDateTime[5]));
+
+        if (SD.exists("PRVCLOCK.CSV"))
+        {
+          SD.remove("PRVCLOCK.CSV");
+        }
+        SD.remove("CLOCK.CSV");
+
+        fileSDCard = SD.open("PRVCLOCK.CSV", FILE_WRITE);
+        if (fileSDCard != 0)
+        {
+          fileSDCard.println("\"Year\",\"Month\",\"Day\",\"Hour\",\"Minute\",\"Second\"");
+          fileSDCard.println(strClockSettingCopy);
+          fileSDCard.close();
+        }
+
+        Serial.println("* processed *");
+        lcd.print("* processed *");
+      }
+      else
+      {
+        fileSDCard.close();
+      }
+    }
+
+  }
+  else
+  {
+    Serial.println("* does not exist");
+    lcd.print("* does not exist");
+  }
+
+//  delay(STARTUP_PAUSE_DELAY);
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // LOGGING.CSV file processing
+  {
+    char szLOGGING[32] = "LOGGING.CSV";
+
+
+    Serial.print("* Test ");
+    Serial.println(szLOGGING);
+
+    fileSDCard = SD.open(szLOGGING);
+    if (fileSDCard)
+    {
+      if (fileSDCard.available())
+      {
+      }
+      fileSDCard.close();
+    }
+    else
+    {
+      fileSDCard = SD.open(szLOGGING, FILE_WRITE);
+      if (fileSDCard)
+      {
+        fileSDCard.println("\"DateTime\",\"Operation\",\"SetPoint1\",\"Temp1\",\"SetPoint2\",\"Temp2\",\"SetPoint3\",\"Temp3\"");
+        fileSDCard.close();
+      }
+      else
+      {
+        Serial.println("*** ERROR ***   ");
+        Serial.println("SD Write Failed ");
+        while (1);
+      }
+    }
+    Serial.println("* processed *");
+  }
+
+  SD.end();
+
+  Serial.println("*** STATUS ***  ");
+  Serial.println("SD Init Finish  ");
+
+  //SDLogging(currentYear, currentMonth, currentDay, currentHour, currentMin, currentSec, "StartUp", 0.1, 0.1, 0.2, 0.2, 0.3, 0.3);
+}
+
+void SDLogging(int iYear, int iMonth, int iDay, int iHour, int iMinute, int iSecond, char *szOp, float fSetPoint1, float fTemp1, float fSetPoint2, float fTemp2, float fSetPoint3, float fTemp3)
+{
+  if (!SD.begin(chipSelectSDCard))
+  {
+    Serial.println("SD LogFail");
+    return;
+  }
+  bSDLogFail = false;
+
+
+  {
+    char szLOGGING[32] = "LOGGING.CSV";
+
+    fileSDCard = SD.open(szLOGGING, FILE_WRITE);
+
+    // if the file opened okay, write to it:
+    if (fileSDCard)
+    {
+      SDCardPrintTwoDigits(iYear);
+      fileSDCard.print("-");
+      SDCardPrintTwoDigits(iMonth);
+      fileSDCard.print("-");
+      SDCardPrintTwoDigits(iDay);
+      fileSDCard.print("T");
+      SDCardPrintTwoDigits(iHour);
+      fileSDCard.print(":");
+      SDCardPrintTwoDigits(iMinute);
+      fileSDCard.print(":");
+      SDCardPrintTwoDigits(iSecond);
+      fileSDCard.print(",");
+      fileSDCard.print(szOp);
+      fileSDCard.print(",");
+      fileSDCard.print(fSetPoint1);
+      fileSDCard.print(",");
+      fileSDCard.print(fTemp1);
+      fileSDCard.print(",");
+      fileSDCard.print(fSetPoint2);
+      fileSDCard.print(",");
+      fileSDCard.print(fTemp2);
+      fileSDCard.print(",");
+      fileSDCard.print(fSetPoint3);
+      fileSDCard.print(",");
+      fileSDCard.print(fTemp3);
+      fileSDCard.println("");
+      fileSDCard.close();
+    }
+    else
+    {
+      // if the file didn't open, display an error:
+      Serial.println("*** ERROR ***   ");
+      Serial.println("Open LOGGING.CSV");
+    }
+  }
+
+  SD.end();
+
+}
+
+
+#endif
