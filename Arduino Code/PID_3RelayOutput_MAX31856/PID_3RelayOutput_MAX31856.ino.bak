@@ -623,27 +623,10 @@ void loop()
     }
     if (ButtonPushed())
     {
-      
       showValue(0, 3,SetpointNew);
-      lcd.print(" [");
+      //lcd.print(" [");
       showValue(0,9,Setpoint[iSelectHeadingPad-1]);
-      lcd.print("]");
-      
-
-/*
-      lcd.setCursor(3, 0);
-      lcd.print(int(SetpointNew)/10);
-      lcd.print(int(SetpointNew)%10);
-      lcd.print(".");
-      lcd.print(int(SetpointNew*10)%10);
-      lcd.print(" [");
-      lcd.setCursor(9, 0);
-      lcd.print(int(Setpoint[iSelectHeadingPad-1])/10);
-      lcd.print(int(Setpoint[iSelectHeadingPad-1])%10);
-      lcd.print(".");
-      lcd.print(int(Setpoint[iSelectHeadingPad-1]*10)%10);
-      lcd.print("]");
-*/
+      //lcd.print("]");
       LCD_PrintLine2("   OK    ");
       iState = STATE_GET_OK_OR_CANCEL;
     }
@@ -658,12 +641,12 @@ void loop()
       if (bOK)
       {
         bOK = false;
-        LCD_PrintLine2("   CANCEL       ");
+        LCD_PrintLine2("   CANCEL");
       }
       else
       {
         bOK = true;
-        LCD_PrintLine2("   OK           ");
+        LCD_PrintLine2("   OK");
       }
       return;
     }
@@ -925,14 +908,10 @@ void showValue(int iRow, int iCol, float fValue)
   if (iRow == 0)
     sLine = sLCD_Line1;
   //sLine = &sLine[iCol];
-//  for (int i=0; i<iCol; i++)
-//    sLine[i] = ' ';
   sLine[iCol+0] = '0' + int(fValue)/10;
   sLine[iCol+1] = '0' + int(fValue)%10;
   sLine[iCol+2] = '.';
   sLine[iCol+3] = '0' + int(fValue*10)%10;
-  for (int i=iCol+4; i<16; i++)
-    sLine[i] = ' ';
   if (iRow == 0)
     LCD_PrintLine1(sLine);
   else
