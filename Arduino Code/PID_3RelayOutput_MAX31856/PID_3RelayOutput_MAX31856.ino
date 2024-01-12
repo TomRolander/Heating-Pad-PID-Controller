@@ -15,7 +15,7 @@
  ********************************************************/
 
 #define DEBUG_OUTPUT    1
-#define SD_DATA_LOGGING 0
+#define SD_DATA_LOGGING 1
 
 void(* resetFunc) (void) = 0;
 
@@ -625,10 +625,11 @@ void loop()
     {
       
       showValue(0, 3,SetpointNew);
+/*      
       lcd.print(" [");
       showValue(0,9,Setpoint[iSelectHeadingPad-1]);
       lcd.print("]");
-      
+*/      
 
 /*
       lcd.setCursor(3, 0);
