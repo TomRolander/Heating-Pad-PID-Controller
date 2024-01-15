@@ -1,18 +1,20 @@
-/********************************************************
- * PID RelayOutput Example
- * Same as basic example, except that this time, the output
- * is going to a digital pin which (we presume) is controlling
- * a relay.  the pid is designed to Output an analog value,
- * but the relay can only be On/Off.
- *
- *   to connect them together we use "time proportioning
- * control"  it's essentially a really slow version of PWM.
- * first we decide on a window size (5000mS say.) we then
- * set the pid to adjust its output between 0 and that window
- * size.  lastly, we add some logic that translates the PID
- * output into "Relay On Time" with the remainder of the
- * window being "Relay Off Time"
- ********************************************************/
+/**************************************************************************
+  Heating Pad Controller
+    Max31856 Thermocouple Amplifiers
+
+  Original Code:  2023-12-21
+
+  Tom Rolander, MSEE
+  Mentor, Circuit Design & Software
+  Miller Library, Fabrication Lab
+  Hopkins Marine Station, Stanford University,
+  120 Ocean View Blvd, Pacific Grove, CA 93950
+  +1 831.915.9526 | rolander@stanford.edu
+
+ **************************************************************************/
+
+#define PROGRAM "DASS Camera Controller"
+#define VERSION "Ver 0.1 2024-01-15"
 
 #define DEBUG_OUTPUT    1
 #define SD_DATA_LOGGING 1
