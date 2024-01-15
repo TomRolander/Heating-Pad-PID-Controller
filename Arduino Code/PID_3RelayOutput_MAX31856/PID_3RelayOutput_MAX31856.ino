@@ -136,13 +136,14 @@ int DisabledHeatPads[3] = {0,0,0};
 int ErrHeatPads[3] =  {0,0,0};
 
 // Heating Pad #1
-//double Offsets[3] = {0.2, 0.0, 0.0};
+double Offsets[3] = {0.2, 0.0, 0.0};
 // Heating Pad #2
 //double Offsets[3] = {0.8, 0.0, 0.0};
 // NO Offsets
-double Offsets[3] = {0.0, 0.0, 0.0};
+//double Offsets[3] = {0.0, 0.0, 0.0};
 
   //initialize the PID variables we're linked to
+
 double Setpoint[3] = {28.0, 28.0, 28.0};
 
 //Specify the links and initial tuning parameters
@@ -955,12 +956,12 @@ int CheckRotate()
     // the encoder is rotating CCW so decrement
     if (digitalRead(DT) != currentStateCLK)
     {
-      iRetCode = -1;
+      iRetCode = 1; //-1;
     }
     else
     {
       // Encoder is rotating CW so increment
-      iRetCode = 1;
+      iRetCode = -1; //1;
     }
   }
   // Remember last CLK state
