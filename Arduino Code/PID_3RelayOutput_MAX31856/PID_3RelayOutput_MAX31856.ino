@@ -19,6 +19,8 @@
 #define DEBUG_OUTPUT    1
 #define SD_DATA_LOGGING 1
 
+#define REVERSE_ROTATE  1
+
 void(* resetFunc) (void) = 0;
 
 // Rotary Encoder Inputs
@@ -38,7 +40,8 @@ bool bOK = true;
 bool bChangeSetpoint = true;
 
 long refresh = 0;
-long iRefresh = 10;
+long iRefreshFast = 1;
+long iRefreshSlow = 500;
 
 #define STATE_START_MSG                   0
 #define STATE_WAIT_FOR_START              1
@@ -443,9 +446,12 @@ void loop()
   if (iState != STATE_RUNNING_CHECK_FOR_STOP)
   {
     refresh++;
-    if ((refresh % iRefresh) == 0)
+    if ((refresh % iRefreshSlow) == 0)
     {
       //Serial.println("Loop");
+      //Serial.print(sLCD_Line1);
+      //Serial.print(" : ");
+      //Serial.println(sLCD_Line2);
       LCD_Refresh();
     }
   }
@@ -846,7 +852,7 @@ void loop()
   }
 
   refresh++;
-  if ((refresh % iRefresh) == 0)
+  if ((refresh % iRefreshFast) == 0)
   {
     lcd.begin(16,2);
     lcd.clear();
@@ -958,12 +964,20 @@ int CheckRotate()
     // the encoder is rotating CCW so decrement
     if (digitalRead(DT) != currentStateCLK)
     {
-      iRetCode = 1; //-1;
+#if REVERSE_ROTATE      
+      iRetCode = 1;
+#else
+      iRetCode = -1;
+#endif      
     }
     else
     {
       // Encoder is rotating CW so increment
-      iRetCode = -1; //1;
+#if REVERSE_ROTATE      
+      iRetCode = -1;
+#else
+      iRetCode = 1;
+#endif      
     }
   }
   // Remember last CLK state
@@ -1036,6 +1050,10 @@ void LCD_PrintLine2(char *sLine)
 
 void LCD_Refresh()
 {
+  lcd.begin(16, 2);
+//  lcd.setCursor(0,0);
+//  lcd.clear();
+
   lcd.setCursor(0,0);
   lcd.print(sLCD_Line1);
   lcd.setCursor(0,1);
